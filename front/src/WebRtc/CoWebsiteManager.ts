@@ -3,6 +3,8 @@ import { Subject } from "rxjs";
 import { iframeListener } from "../Api/IframeListener";
 import { touchScreenManager } from "../Touch/TouchScreenManager";
 import { waScaleManager } from "../Phaser/Services/WaScaleManager";
+import { coWebsites, getMainCoWebsite } from "../Stores/CoWebsitesStore";
+import { get } from "svelte/store";
 
 enum iframeStates {
     closed = 1,
@@ -12,6 +14,7 @@ enum iframeStates {
 
 const cowebsiteDivId = "cowebsite"; // the id of the whole container.
 const cowebsiteMainDomId = "cowebsite-main"; // the id of the parent div of the iframe.
+const cowebsiteJitsiBufferDomId = "cowebsite-jitsi-buffer"; // the id of the temporary Jitsi iframe parent.
 const cowebsiteAsideDomId = "cowebsite-aside"; // the id of the parent div of the iframe.
 export const cowebsiteCloseButtonId = "cowebsite-close";
 const cowebsiteFullScreenButtonId = "cowebsite-fullscreen";
@@ -37,6 +40,7 @@ class CoWebsiteManager {
     private cowebsiteDiv: HTMLDivElement;
     private resizing: boolean = false;
     private cowebsiteMainDom: HTMLDivElement;
+    private cowebsiteJitsiBufferDom: HTMLDivElement;
     private cowebsiteAsideDom: HTMLDivElement;
     private previousTouchMoveCoordinates: TouchMoveCoordinates | null = null; //only use on touchscreens to track touch movement
 
@@ -71,17 +75,14 @@ class CoWebsiteManager {
     constructor() {
         this.cowebsiteDiv = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteDivId);
         this.cowebsiteMainDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteMainDomId);
+        this.cowebsiteJitsiBufferDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteJitsiBufferDomId);
         this.cowebsiteAsideDom = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteAsideDomId);
+        this.initResizeListeners(touchScreenManager.supportTouchScreen);
 
-        if (touchScreenManager.supportTouchScreen) {
-            this.initResizeListeners(true);
-        }
-        this.initResizeListeners(false);
-
-        const buttonCloseFrame = HtmlUtils.getElementByIdOrFail(cowebsiteCloseButtonId);
-        buttonCloseFrame.addEventListener("click", () => {
-            buttonCloseFrame.blur();
-            this.closeCoWebsite();
+        const buttonCloseCoWebsites = HtmlUtils.getElementByIdOrFail(cowebsiteCloseButtonId);
+        buttonCloseCoWebsites.addEventListener("click", () => {
+            buttonCloseCoWebsites.blur();
+            this.closeCoWebsites();
         });
 
         const buttonFullScreenFrame = HtmlUtils.getElementByIdOrFail(cowebsiteFullScreenButtonId);
@@ -112,7 +113,7 @@ class CoWebsiteManager {
 
         this.cowebsiteAsideDom.addEventListener(touchMode ? "touchstart" : "mousedown", (event) => {
             this.resizing = true;
-            this.getIframeDom().style.display = "none";
+            getMainCoWebsite().style.display = "none";
             if (touchMode) {
                 const touchEvent = (event as TouchEvent).touches[0];
                 this.previousTouchMoveCoordinates = { x: touchEvent.pageX, y: touchEvent.pageY };
@@ -127,7 +128,7 @@ class CoWebsiteManager {
                 this.previousTouchMoveCoordinates = null;
             }
             document.removeEventListener(touchMode ? "touchmove" : "mousemove", movecallback);
-            this.getIframeDom().style.display = "block";
+            getMainCoWebsite().style.display = "block";
             this.resizing = false;
         });
     }
@@ -160,10 +161,26 @@ class CoWebsiteManager {
         this.cowebsiteDiv.style.height = "";
     }
 
-    private getIframeDom(): HTMLIFrameElement {
-        const iframe = HtmlUtils.getElementByIdOrFail<HTMLDivElement>(cowebsiteDivId).querySelector("iframe");
-        if (!iframe) throw new Error("Could not find iframe!");
-        return iframe;
+    private searchCoWebsiteById(coWebsiteId: string) {
+        return get(coWebsites).find((coWebsite: HTMLIFrameElement) => coWebsite.id === coWebsiteId);
+    }
+
+    private removeCoWebsiteFromStack(coWebsite: HTMLIFrameElement) {
+        coWebsites.set(get(coWebsites).filter(
+            (coWebsiteToRemove: HTMLIFrameElement) => coWebsiteToRemove.id !== coWebsite.id
+        ));
+
+        if (get(coWebsites).length < 1) {
+            this.close();
+        }
+    }
+
+    private moveToMainCoWebsite(coWebsite: HTMLIFrameElement) {
+        getMainCoWebsite().scrolling = "no";
+        this.removeCoWebsiteFromStack(coWebsite);
+        coWebsite.scrolling = "yes";
+        coWebsites.set([coWebsite, ...get(coWebsites)]);
+        this.cowebsiteMainDom.appendChild(coWebsite);
     }
 
     public loadCoWebsite(
@@ -173,25 +190,42 @@ class CoWebsiteManager {
         allowPolicy?: string,
         widthPercent?: number
     ): void {
-        this.load();
-        this.cowebsiteMainDom.innerHTML = ``;
+        if (get(coWebsites).length < 1) {
+            this.load();
+        }
 
-        const iframe = document.createElement("iframe");
-        iframe.id = "cowebsite-iframe";
-        iframe.src = new URL(url, base).toString();
+        const coWebsite = document.createElement("iframe");
+
+        do {
+            coWebsite.id = "cowebsite-iframe-" + (Math.random() + 1).toString(36).substring(7);
+        } while (this.searchCoWebsiteById(coWebsite.id));
+
+        coWebsite.src = new URL(url, base).toString()
+
+        coWebsite.scrolling = "no";
+
         if (allowPolicy) {
-            iframe.allow = allowPolicy;
+            coWebsite.allow = allowPolicy;
         }
+
         const onloadPromise = new Promise<void>((resolve) => {
-            iframe.onload = () => resolve();
+            coWebsite.onload = () => resolve();
         });
+
         if (allowApi) {
-            iframeListener.registerIframe(iframe);
+            iframeListener.registerIframe(coWebsite);
         }
-        this.cowebsiteMainDom.appendChild(iframe);
+
+        coWebsites.set([...get(coWebsites), coWebsite]);
+
+        if (get(coWebsites).length === 1) {
+            this.moveToMainCoWebsite(coWebsite);
+        }
+
         const onTimeoutPromise = new Promise<void>((resolve) => {
             setTimeout(() => resolve(), 2000);
         });
+
         this.currentOperationPromise = this.currentOperationPromise
             .then(() => Promise.race([onloadPromise, onTimeoutPromise]))
             .then(() => {
@@ -205,7 +239,7 @@ class CoWebsiteManager {
             })
             .catch((err) => {
                 console.error("Error loadCoWebsite => ", err);
-                this.closeCoWebsite();
+                this.removeCoWebsiteFromStack(coWebsite);
             });
     }
 
@@ -213,38 +247,73 @@ class CoWebsiteManager {
      * Just like loadCoWebsite but the div can be filled by the user.
      */
     public insertCoWebsite(callback: (cowebsite: HTMLDivElement) => Promise<void>, widthPercent?: number): void {
-        this.load();
-        this.cowebsiteMainDom.innerHTML = ``;
+        if (get(coWebsites).length < 1) {
+            this.load();
+        }
+
         this.currentOperationPromise = this.currentOperationPromise
             .then(() => callback(this.cowebsiteMainDom))
             .then(() => {
-                this.open();
-                if (widthPercent) {
-                    this.widthPercent = widthPercent;
+                const coWebsite = this.cowebsiteJitsiBufferDom.getElementsByTagName('iframe').item(0);
+
+                if (!coWebsite) {
+                    console.error("Error insertCoWebsite => Cannot find Iframe Element on DOM");
+                    return;
                 }
-                setTimeout(() => {
-                    this.fire();
-                }, animationTime);
+
+                coWebsites.set([...get(coWebsites), coWebsite]);
+
+                if (get(coWebsites).length === 1) {
+                    this.open();
+
+                    if (widthPercent) {
+                        this.widthPercent = widthPercent;
+                    }
+
+                    setTimeout(() => {
+                        this.fire();
+                    }, animationTime);
+                }
             })
             .catch((err) => {
                 console.error("Error insertCoWebsite => ", err);
-                this.closeCoWebsite();
             });
     }
 
-    public closeCoWebsite(): Promise<void> {
+    public closeCoWebsite(coWebsite: HTMLIFrameElement): Promise<void> {
+        this.currentOperationPromise = this.currentOperationPromise.then(
+            () =>
+                new Promise((resolve) => {
+                    if (this.opened === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
+                    this.close();
+                    this.fire();
+                    if (coWebsite) {
+                        iframeListener.unregisterIframe(coWebsite);
+                    }
+                    setTimeout(() => {
+                        this.removeCoWebsiteFromStack(coWebsite);
+                        coWebsite.remove();
+                        resolve();
+                    }, animationTime);
+                })
+        );
+        return this.currentOperationPromise;
+    }
+
+    public closeCoWebsites(): Promise<void> {
         this.currentOperationPromise = this.currentOperationPromise.then(
             () =>
                 new Promise((resolve, reject) => {
                     if (this.opened === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
                     this.close();
                     this.fire();
-                    const iframe = this.cowebsiteDiv.querySelector("iframe");
-                    if (iframe) {
-                        iframeListener.unregisterIframe(iframe);
-                    }
+
+                    get(coWebsites).forEach((coWebsite: HTMLIFrameElement) => {
+                        iframeListener.unregisterIframe(coWebsite);
+                        this.removeCoWebsiteFromStack(coWebsite);
+                    });
+
                     setTimeout(() => {
-                        this.cowebsiteMainDom.innerHTML = ``;
                         resolve();
                     }, animationTime);
                 })

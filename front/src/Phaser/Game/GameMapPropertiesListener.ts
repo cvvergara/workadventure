@@ -39,7 +39,6 @@ export class GameMapPropertiesListener {
         this.gameMap.onPropertyChange("openWebsite", (newValue, oldValue, allProps) => {
             if (newValue === undefined) {
                 layoutManagerActionStore.removeAction("openWebsite");
-                coWebsiteManager.closeCoWebsite();
             } else {
                 const openWebsiteFunction = () => {
                     coWebsiteManager.loadCoWebsite(

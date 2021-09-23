@@ -232,7 +232,7 @@ class IframeListener {
                             payload.data.allowPolicy
                         );
                     } else if (payload.type === "closeCoWebSite") {
-                        scriptUtils.closeCoWebSite();
+                        scriptUtils.closeCoWebSites();
                     } else if (payload.type === "disablePlayerControls") {
                         this._disablePlayerControlStream.next();
                     } else if (payload.type === "restorePlayerControls") {

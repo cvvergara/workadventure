@@ -185,7 +185,7 @@ class JitsiFactory {
         if (!this.jitsiApi) {
             return;
         }
-        await coWebsiteManager.closeCoWebsite();
+        await coWebsiteManager.closeCoWebsites();
         this.jitsiApi.removeListener("audioMuteStatusChanged", this.audioCallback);
         this.jitsiApi.removeListener("videoMuteStatusChanged", this.videoCallback);
         this.jitsiApi?.dispose();

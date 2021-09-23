@@ -42,6 +42,8 @@
     import AudioManager from "./AudioManager/AudioManager.svelte"
     import { showReportScreenStore, userReportEmpty } from "../Stores/ShowReportScreenStore";
     import ReportMenu from "./ReportMenu/ReportMenu.svelte";
+    import {coWebsites} from "../Stores/CoWebsitesStore";
+    import CoWebsitesContainer from "./CoWebsites/CoWebsitesContainer.svelte";
 
     export let game: Game;
 
@@ -143,5 +145,8 @@
     {/if}
     {#if $warningContainerStore}
         <WarningContainer></WarningContainer>
+    {/if}
+    {#if $coWebsites.length > 1}
+        <CoWebsitesContainer coWebsites={$coWebsites}></CoWebsitesContainer>
     {/if}
 </div>

@@ -45,6 +45,11 @@ export class WorkadventureNavigationCommands extends IframeApiContribution<Worka
         });
     }
 
+    // Todo: add getOpenedCoWebsites function
+
+    /**
+     * @deprecated Use instead close function on each WACoWebsite objects get by getOpenedCoWebsites
+     */
     closeCoWebSite(): void {
         sendToWorkadventure({
             type: "closeCoWebSite",

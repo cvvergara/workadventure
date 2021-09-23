@@ -16,8 +16,8 @@ class ScriptUtils {
         coWebsiteManager.loadCoWebsite(url, base, api, policy);
     }
 
-    public closeCoWebSite() {
-        coWebsiteManager.closeCoWebsite();
+    public closeCoWebSites() {
+        coWebsiteManager.closeCoWebsites();
     }
 
     public sendAnonymousChat(chatEvent: ChatEvent) {

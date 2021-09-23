@@ -1115,3 +1115,19 @@ div.emoji-picker {
         border-radius: 1em;
     }
 }
+
+div.pixel {
+    visibility: hidden;
+    height: 1px;
+    width: 1px;
+}
+
+div.cowwebsite-container {
+    iframe {
+        pointer-events: none !important;
+        overflow: hidden;
+        border: 0;
+        height: 100%;
+        width: 100%;
+    }
+}
