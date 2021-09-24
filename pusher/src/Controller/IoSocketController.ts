@@ -267,6 +267,7 @@ export class IoSocketController {
                                 token,
                                 userUuid: userData.userUuid,
                                 IPAddress,
+                                userIdentifier,
                                 roomId,
                                 name,
                                 companion,
@@ -428,6 +429,7 @@ export class IoSocketController {
 
         client.messages = ws.messages;
         client.name = ws.name;
+        client.userIdentifier = ws.userIdentifier;
         client.tags = ws.tags;
         client.visitCardUrl = ws.visitCardUrl;
         client.textures = ws.textures;
