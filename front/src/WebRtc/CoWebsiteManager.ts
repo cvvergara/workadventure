@@ -28,7 +28,7 @@ interface TouchMoveCoordinates {
 }
 
 class CoWebsiteManager {
-    private opened: iframeStates = iframeStates.closed;
+    private openedMain: iframeStates = iframeStates.closed;
 
     private _onResize: Subject<void> = new Subject();
     public onResize = this._onResize.asObservable();
@@ -139,24 +139,24 @@ class CoWebsiteManager {
         return window.navigator.userAgent.includes("Firefox") ? 1 : window.devicePixelRatio;
     }
 
-    private close(): void {
+    private closeMain(): void {
         this.cowebsiteDiv.classList.remove("loaded"); //edit the css class to trigger the transition
         this.cowebsiteDiv.classList.add("hidden");
-        this.opened = iframeStates.closed;
-        this.resetStyle();
+        this.openedMain = iframeStates.closed;
+        this.resetStyleMain();
     }
-    private load(): void {
+    private loadMain(): void {
         this.cowebsiteDiv.classList.remove("hidden"); //edit the css class to trigger the transition
         this.cowebsiteDiv.classList.add("loading");
-        this.opened = iframeStates.loading;
+        this.openedMain = iframeStates.loading;
     }
-    private open(): void {
+    private openMain(): void {
         this.cowebsiteDiv.classList.remove("loading", "hidden"); //edit the css class to trigger the transition
-        this.opened = iframeStates.opened;
-        this.resetStyle();
+        this.openedMain = iframeStates.opened;
+        this.resetStyleMain();
     }
 
-    public resetStyle() {
+    public resetStyleMain() {
         this.cowebsiteDiv.style.width = "";
         this.cowebsiteDiv.style.height = "";
     }
@@ -171,16 +171,29 @@ class CoWebsiteManager {
         ));
 
         if (get(coWebsites).length < 1) {
-            this.close();
+            this.closeMain();
         }
     }
 
-    private moveToMainCoWebsite(coWebsite: HTMLIFrameElement) {
+    public moveToMainCoWebsite(coWebsite: HTMLIFrameElement) {
         getMainCoWebsite().scrolling = "no";
         this.removeCoWebsiteFromStack(coWebsite);
         coWebsite.scrolling = "yes";
         coWebsites.set([coWebsite, ...get(coWebsites)]);
         this.cowebsiteMainDom.appendChild(coWebsite);
+    }
+
+    public moveToMainSubCoWebsite(coWebsite: HTMLIFrameElement) {
+        this.removeCoWebsiteFromStack(coWebsite);
+        const coWebsitesCopy = get(coWebsites);
+        coWebsitesCopy.splice(1,0, coWebsite);
+        coWebsites.set([...coWebsitesCopy.splice(1,0, coWebsite)]);
+    }
+
+    public searchJitsi(): HTMLIFrameElement|undefined {
+        return get(coWebsites).find((coWebsite : HTMLIFrameElement) =>
+            coWebsite.id.toLowerCase().includes('jitsi')
+        );
     }
 
     public loadCoWebsite(
@@ -191,7 +204,9 @@ class CoWebsiteManager {
         widthPercent?: number
     ): void {
         if (get(coWebsites).length < 1) {
-            this.load();
+            this.loadMain();
+        } else if (get(coWebsites).length === 5) {
+            return;
         }
 
         const coWebsite = document.createElement("iframe");
@@ -229,7 +244,7 @@ class CoWebsiteManager {
         this.currentOperationPromise = this.currentOperationPromise
             .then(() => Promise.race([onloadPromise, onTimeoutPromise]))
             .then(() => {
-                this.open();
+                this.openMain();
                 if (widthPercent) {
                     this.widthPercent = widthPercent;
                 }
@@ -248,11 +263,13 @@ class CoWebsiteManager {
      */
     public insertCoWebsite(callback: (cowebsite: HTMLDivElement) => Promise<void>, widthPercent?: number): void {
         if (get(coWebsites).length < 1) {
-            this.load();
+            this.loadMain();
+        } else if (get(coWebsites).length === 5) {
+            return;
         }
 
         this.currentOperationPromise = this.currentOperationPromise
-            .then(() => callback(this.cowebsiteMainDom))
+            .then(() => callback(this.cowebsiteJitsiBufferDom))
             .then(() => {
                 const coWebsite = this.cowebsiteJitsiBufferDom.getElementsByTagName('iframe').item(0);
 
@@ -261,10 +278,12 @@ class CoWebsiteManager {
                     return;
                 }
 
+                // Add to the stack and move to the main
                 coWebsites.set([...get(coWebsites), coWebsite]);
+                this.moveToMainCoWebsite(coWebsite);
 
                 if (get(coWebsites).length === 1) {
-                    this.open();
+                    this.openMain();
 
                     if (widthPercent) {
                         this.widthPercent = widthPercent;
@@ -284,12 +303,16 @@ class CoWebsiteManager {
         this.currentOperationPromise = this.currentOperationPromise.then(
             () =>
                 new Promise((resolve) => {
-                    if (this.opened === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
-                    this.close();
-                    this.fire();
+                    if (get(coWebsites).length === 1) {
+                        if (this.openedMain === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
+                        this.closeMain();
+                        this.fire();
+                    }
+
                     if (coWebsite) {
                         iframeListener.unregisterIframe(coWebsite);
                     }
+
                     setTimeout(() => {
                         this.removeCoWebsiteFromStack(coWebsite);
                         coWebsite.remove();
@@ -300,29 +323,29 @@ class CoWebsiteManager {
         return this.currentOperationPromise;
     }
 
+    public closeJitsi() {
+        const jitsi = this.searchJitsi();
+        if (jitsi) {
+            const newMainCoWebsite = get(coWebsites)[1];
+            if (newMainCoWebsite) {
+                this.moveToMainCoWebsite(newMainCoWebsite);
+            }
+            this.closeCoWebsite(jitsi);
+        }
+    }
+
     public closeCoWebsites(): Promise<void> {
-        this.currentOperationPromise = this.currentOperationPromise.then(
-            () =>
-                new Promise((resolve, reject) => {
-                    if (this.opened === iframeStates.closed) resolve(); //this method may be called twice, in case of iframe error for example
-                    this.close();
-                    this.fire();
-
-                    get(coWebsites).forEach((coWebsite: HTMLIFrameElement) => {
-                        iframeListener.unregisterIframe(coWebsite);
-                        this.removeCoWebsiteFromStack(coWebsite);
-                    });
-
-                    setTimeout(() => {
-                        resolve();
-                    }, animationTime);
-                })
-        );
+        this.currentOperationPromise = this.currentOperationPromise
+        .then(() => {
+            get(coWebsites).forEach((coWebsite: HTMLIFrameElement) => {
+                this.closeCoWebsite(coWebsite);
+            });
+        });
         return this.currentOperationPromise;
     }
 
     public getGameSize(): { width: number; height: number } {
-        if (this.opened !== iframeStates.opened) {
+        if (this.openedMain !== iframeStates.opened) {
             return {
                 width: window.innerWidth,
                 height: window.innerHeight,
@@ -348,7 +371,7 @@ class CoWebsiteManager {
 
     private fullscreen(): void {
         if (this.isFullScreen) {
-            this.resetStyle();
+            this.resetStyleMain();
             this.fire();
             //we don't trigger a resize of the phaser game since it won't be visible anyway.
             HtmlUtils.getElementByIdOrFail(cowebsiteOpenFullScreenImageId).style.display = "inline";

@@ -1122,12 +1122,13 @@ div.pixel {
     width: 1px;
 }
 
-div.cowwebsite-container {
+div.cowebsite-iframe-container {
     iframe {
         pointer-events: none !important;
         overflow: hidden;
         border: 0;
         height: 100%;
         width: 100%;
+        zoom: 0.75;
     }
 }
