@@ -15,10 +15,10 @@ class AnalyticsClient {
         }
     }
 
-    identifyUser(uuid: string) {
+    identifyUser(uuid: string, email: string | null) {
         this.posthogPromise
             .then((posthog) => {
-                posthog.identify(uuid, { uuid, wa: true });
+                posthog.identify(uuid, { uuid, email, wa: true });
             })
             .catch();
     }
@@ -39,10 +39,10 @@ class AnalyticsClient {
             .catch();
     }
 
-    enteredRoom(roomId: string) {
+    enteredRoom(roomId: string, roomInstance: string) {
         this.posthogPromise
             .then((posthog) => {
-                posthog.capture("$pageView", { roomId });
+                posthog.capture("$pageView", { roomId, roomInstance });
             })
             .catch();
     }

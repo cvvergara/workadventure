@@ -112,7 +112,7 @@ class ConnectionManager {
             const data = await Axios.post(`${PUSHER_URL}/register`, { organizationMemberToken }).then(
                 (res) => res.data
             );
-            this.localUser = new LocalUser(data.userUuid, data.textures);
+            this.localUser = new LocalUser(data.userUuid, data.textures, data.email);
             this.authToken = data.authToken;
             localUserStore.saveUser(this.localUser);
             localUserStore.setAuthToken(this.authToken);
@@ -193,7 +193,7 @@ class ConnectionManager {
             return Promise.reject(new Error("Invalid URL"));
         }
         if (this.localUser) {
-            analyticsClient.identifyUser(this.localUser.uuid);
+            analyticsClient.identifyUser(this.localUser.uuid, this.localUser.email);
         }
 
         this.serviceWorker = new _ServiceWorker();
